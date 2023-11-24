@@ -43,15 +43,17 @@ int main(void) {
       // Using function is too slow
       count_in_cycle = 0;
       time_rotation = 0;
-      for(int i = 0; i < encdr_holes; i++){ // Calculating RPM via 1 (or however many is needed) last cycle and adjusting for '0' measurements and 1st cycle
-        if (time_diffs[i] != 0){
-          count_in_cycle += 1;
-          time_rotation += time_diffs[i];
+      if(count > 1){ // Security measure against first count
+        for(int i = 0; i < encdr_holes; i++){ // Calculating RPM via 1 (or however many is needed) last cycle and adjusting for '0' measurements and 1st cycle
+          if (time_diffs[i] != 0){
+            count_in_cycle += 1;
+            time_rotation += time_diffs[i];
+          }
         }
-      }
-      RPM = (60 / time_rotation) * (encdr_holes/count_in_cycle) * 1000; //Getting RPM with a accuracy of 3 digits after dot for Nextion
-      RPM_for_screen = RPM;
-      printf("page0.x0.val=%lu%c%c%c", RPM_for_screen, 0xff, 0xff, 0xff);
+        RPM = (60 / time_rotation) * (encdr_holes/count_in_cycle) * 1000; //Getting RPM with a accuracy of 3 digits after dot for Nextion
+        RPM_for_screen = RPM;
+        printf("page0.x0.val=%lu%c%c%c", RPM_for_screen, 0xff, 0xff, 0xff);
+      }  
     }
   }
   
