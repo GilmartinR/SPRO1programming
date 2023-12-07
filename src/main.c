@@ -15,14 +15,26 @@ int main(void) {
   DDRB &= ~0x01;
   PORTB |= 0x01;
 
+  // PWM Setup
 
-  double time_for_count = 0; // Time difference between signals
+  DDRD |= 0x60;
+  TCCR0A |= 0xA3;
+  TCCR0B |= 0x05;
+
+  // ADC Setup
+
+  ADMUX = ADMUX | 0x40;
+  ADCSRB = ADCSRB & (0xF8);
+  ADCSRA = ADCSRA | 0xE7;
+
+
+
   uint32_t count = 0; // Total amount of signals
   unsigned count_in_cycle = 0; // Security measure to avoid "0" results when calculatng avg RPM
   double time_rotation = 0; // Time for a full rotation
   double time_diffs[encdr_holes]; // Last 8 time differences
-  double RPM = 0; // RPM in double format
   uint32_t RPM_for_screen; // RPM in UNSIGNED LONG INT format for NEXTION
+  uint32_t adclow;
 
   for(int i = 0; i < encdr_holes; i++){
     time_diffs[i] = 0;
@@ -33,12 +45,13 @@ int main(void) {
   printf("page0.x0.val=66000%c%c%c", 0xff, 0xff, 0xff);
   
   while(1) {
+    OCR0A = 255;
 		if ((TIFR1 & 0x20) == 0x20 ){ // Optocoupler has received a signal
+      
       count += 1;
       TCNT1 = 0;
       TIFR1 |= 0x20;
-      time_for_count = ICR1 * 0.000064; //ticks to seconds
-      time_diffs[count % encdr_holes] = time_for_count;
+      time_diffs[count % encdr_holes] = ICR1 * 0.000064; //ticks to seconds
 
       // Using function is too slow
       count_in_cycle = 0;
@@ -50,12 +63,14 @@ int main(void) {
             time_rotation += time_diffs[i];
           }
         }
-        RPM = (60 / time_rotation) * (encdr_holes/count_in_cycle) * 1000; //Getting RPM with a accuracy of 3 digits after dot for Nextion
-        RPM_for_screen = RPM;
+        RPM_for_screen = (60 / time_rotation) * (encdr_holes/count_in_cycle) * 1000; //Getting RPM with a accuracy of 3 digits after dot for Nextion
         printf("page0.x0.val=%lu%c%c%c", RPM_for_screen, 0xff, 0xff, 0xff);
       }  
     }
+    adclow = ADCL;
+
+     printf("page0.n0.val=%lu%c%c%c", 300 * (adclow + ((ADCH & 0x03) << 8)) / 1024 * 5, 0xff, 0xff, 0xff);
   }
-  
+ 
   return 0;
 }
