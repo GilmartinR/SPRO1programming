@@ -4,7 +4,7 @@
 #include "usart.h"
 
 #define encdr_holes 8
-#define base_OCR 250 // OCR0A value at which vehicle begins movement
+#define base_OCR 150 // OCR0A value at which vehicle begins movement
 #define pi 3.1416
 #define diameter 65
 #define k 1 // RPS per 1 OCR0A increase post base_OCR
@@ -65,21 +65,46 @@ int main(void) {
   saved_OCR = base_OCR;//d_rem[sector] / (t_rem[sector] * pi * k * diameter) + base_OCR; //Starting OCR0A
     printf("page 0%c%c%c", 0xff, 0xff, 0xff);
     while(runflag && battery_flag) {
-    // PWM Power Setup
+        
+        OCR0A = saved_OCR; //0 - 255 PWM Power Setup
 
-        OCR0A = saved_OCR; //0 - 255
-
-        // Optocoupler signal Reading
-        if ((TIFR1 & 0x20) == 0x20 ){ 
+        if ((TIFR1 & 0x20) == 0x20 ){ // Optocoupler signal Reading
         
             count += 1;
             TCNT1 = 0;
             TIFR1 |= 0x20;
-            time_diffs[count % (encdr_holes)] = ICR1 * 0.000064; //ticks to seconds
+            time_diffs[count % (encdr_holes)] = ICR1 * 0.000064; //ticks to seconds, for average RPM calc
 
-            // Using function is too slow
+            // In case of non-0 time, calculate distance and time remaining, along with required OCR value after each measurement
+
+            if(!ICR1){
+                d_rem[sector] -= (pi * diameter) / encdr_holes;
+                t_rem[sector] -= ICR1 * 0.000064;
+                printf("page0.n1.val=%d%c%c%c", (int) d_rem[sector], 0xff, 0xff, 0xff);
+                // if ((t_rem[sector] <= 0) && (d_rem[sector] > 0)){
+                //     //printf("FAILURE!");
+                //     runflag = 0;
+                //     break;
+                // }
+                // if ((d_rem[sector] <= 0) && (t_rem[sector] > 2)){
+                //     runflag = 0;
+                //     break;
+                // }
+                // if((d_rem[sector]<= 0) && (t_rem[sector] <= 2)){
+                //     sector += 1;
+                // }
+                // new_OCR = 4 * d_rem[sector] / (t_rem[sector]  * k * pi * diameter) + base_OCR;
+                // if(new_OCR > saved_OCR){
+                //     //printf("Speeding Up!");
+                // }
+                // if(new_OCR < saved_OCR){
+                //     //printf("Slowing down!");
+                // }       
+                // saved_OCR = new_OCR;
+                
+            }
             
-            if((count > 1) && !(count % (encdr_holes))){ // Security measure against first count
+            if(!(count % (encdr_holes))){ // RPM printing every full wheel turn
                 count_in_cycle = 0;
                 time_rotation = 0;
                 for(int i = 0; i < encdr_holes; i++){ // Calculating RPM via 1 (or however many is needed) last cycle and adjusting for '0' measurements and 1st cycle
@@ -88,45 +113,21 @@ int main(void) {
                         time_rotation += time_diffs[i];
                     }
                 }
-                t_rem[sector] -= time_rotation;
-                d_rem[sector] -= (pi * diameter * count_in_cycle / encdr_holes);
-                printf("page0.n1.val=%d%c%c%c", (int) d_rem[sector], 0xff, 0xff, 0xff);
-                /*if ((t_rem[sector] <= 0) && (d_rem[sector] > 0)){
-                    //printf("FAILURE!");
-                    runflag = 0;
-                    break;
-                }
-                if ((d_rem[sector] <= 0) && (t_rem[sector] > 2)){
-                    runflag = 0;
-                    break;
-                }
-                if((d_rem[sector]<= 0) && (t_rem[sector] <= 2)){
-                    sector += 1;
-                }
-                new_OCR = 4 * d_rem[sector] / (t_rem[sector]  * k * pi * diameter) + base_OCR;
-                if(new_OCR > saved_OCR){
-                    //printf("Speeding Up!");
-                }
-                if(new_OCR < saved_OCR){
-                    //printf("Slowing down!");
-                }       
-                saved_OCR = new_OCR;
-                */
                 RPM_for_screen = (60 / time_rotation) * (4 * encdr_holes/count_in_cycle) * 4000; //Getting RPM with a accuracy of 3 digits after dot for Nextion
-                
+                printf("page0.x0.val=%ld%c%c%c", RPM_for_screen, 0xff, 0xff, 0xff); 
             }
-            //printf("page0.x0.val=%ld%c%c%c", count * 10, 0xff, 0xff, 0xff); 
+
         }
-        adclow = ADCL;
+
+        adclow = ADCL; // Battery Voltage measurement
         printf("page0.n0.val=%lu%c%c%c", 300 * (adclow + ((ADCH & 0x03) << 8)) / 1024 * 5, 0xff, 0xff, 0xff);
         if ( 300 * (adclow + ((ADCH & 0x03) << 8)) / 1024 * 5 <=680){ // Stop Program on Less than set value on Voltage - WORKING
             battery_flag = 0; 
             printf("page 1%c%c%c", 0xff, 0xff, 0xff);
+            printf("page1.t0.val=%s%c%c%c", "RECHARGE", 0xff,0xff,0xff);
             OCR0A = 0;
         }
-    }
-    if(battery_flag == 0){
-        
+
     }
     return 0;
 }
